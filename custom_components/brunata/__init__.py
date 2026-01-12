@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from brunata_api import Client
 
@@ -55,3 +55,67 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
+
+class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
+    """Class to manage fetching Brunata data."""
+
+    def __init__(self, hass: HomeAssistant, client: Client):
+        """Initialize."""
+        self.client = client
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(hours=24),
+        )
+
+    async def _async_update_data(self):
+        """Fetch data from API."""
+        try:
+            # Hvis vi ikke har data endnu, henter vi historik (f.eks. 1 år tilbage)
+            if not self.data:
+                _LOGGER.info("Henter historiske Brunata målinger (1 år tilbage)")
+                start_date = datetime.now() - timedelta(days=365)
+                start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+
+                # Vi skal kalde update_meters manuelt med vores start_date
+                # da get_meters() altid bruger dags dato i brunata-api 0.1.6
+                await self.client._get_tokens()
+                await self.client._init_mappers()
+
+                # Vi bruger api_wrapper direkte for at styre startdate
+                from brunata_api.const import API_URL, METERS_URL
+                from brunata_api import Meter
+
+                result = (
+                    await self.client.api_wrapper(
+                        method="GET",
+                        url=f"{API_URL}/consumer/meters",
+                        params={
+                            "startdate": f"{start_date.isoformat()}.000Z",
+                        },
+                        headers={
+                            "Referer": METERS_URL,
+                        },
+                    )
+                ).json()
+
+                for item in result:
+                    json_meter = item["meter"]
+                    if json_meter["superAllocationUnit"] is None:
+                        continue
+                    json_reading = item["reading"]
+                    meter_id = str(json_meter["meterId"])
+                    meter = self.client._meters.get(meter_id)
+                    if meter is None:
+                        meter = Meter(self.client, json_meter)
+                        self.client._meters[meter_id] = meter
+                    meter.add_reading(json_reading)
+
+                return self.client._meters
+
+            # Ellers bare almindelig opdatering
+            meters = await self.client.get_meters()
+            return {meter._meter_id: meter for meter in meters}
+        except Exception as err:
+            raise UpdateFailed(f"Error communicating with API: {err}")
