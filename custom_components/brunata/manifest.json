@@ -1,11 +1,9 @@
 {
   "domain": "brunata",
   "name": "Brunata",
-  "documentation": "https://github.com/yourusername/yourrepo",
-  "issue_tracker": "https://github.com/yourusername/yourrepo/issues",
-  "dependencies": [],
-  "codeowners": [],
-  "requirements": ["brunata-api==0.1.6"],
-  "version": "1.0.0",
-  "iot_class": "cloud_polling"
+  "codeowners": ["@kimvonmullen"],
+  "documentation": "https://github.com/kimvonmullen/brunata_hacs",
+  "issue_tracker": "https://github.com/kimvonmullen/brunata_hacs/issues",
+  "requirements": ["brunata-api"],
+  "version": "0.1"
 }
