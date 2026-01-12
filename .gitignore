@@ -9,5 +9,4 @@
 # Editor-based HTTP Client requests
 /httpRequests/
 # Ignorer PyCharm .idea-mappe
-.idea/
-
+/.idea
