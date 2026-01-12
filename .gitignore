@@ -10,3 +10,6 @@
 /httpRequests/
 # Ignorer PyCharm .idea-mappe
 /.idea
+
+# Hemmelige filer
+.env
