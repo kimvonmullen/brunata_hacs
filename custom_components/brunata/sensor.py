@@ -43,9 +43,9 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._meter_id = meter._meter_id
         self._attr_unique_id = f"brunata_{self._meter_id}_consumption"
-        self._attr_name = "Forbrug"
+        self._attr_name = f"Brunata {self._meter_id} Consumption"
         self._attr_native_unit_of_measurement = meter.meter_unit
-        
+
         # Bestem device class og ikon
         unit = meter.meter_unit.lower()
         if unit in ["m³", "m3", "l"]:
