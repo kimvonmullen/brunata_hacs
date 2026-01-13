@@ -22,22 +22,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     password = entry.data[CONF_PASSWORD]
 
     client = Client(email, password)
-
-    async def async_update_data():
-        """Fetch data from API endpoint."""
-        try:
-            meters = await client.get_meters()
-            return {meter._meter_id: meter for meter in meters}
-        except Exception as err:
-            raise UpdateFailed(f"Fejl ved kontakt til Brunata API: {err}") from err
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name="Brunata",
-        update_method=async_update_data,
-        update_interval=timedelta(hours=24), # Brunata opdaterer typisk kun en gang i døgnet
-    )
+    coordinator = BrunataDataUpdateCoordinator(hass, client)
 
     # Hent data første gang
     await coordinator.async_config_entry_first_refresh()
@@ -121,7 +106,8 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
 
                 if not self.client._meters:
                     _LOGGER.warning("Ingen målere fundet i historik-opslaget. Forsøger standard hentning.")
-                    return await self.client.get_meters()
+                    meters = await self.client.get_meters()
+                    return {meter._meter_id: meter for meter in meters}
 
                 return self.client._meters
 

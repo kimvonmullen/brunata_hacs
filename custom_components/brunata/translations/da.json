@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "email": "E-mail",
+          "password": "Adgangskode"
+        },
+        "description": "Indtast venligst dine Brunata loginoplysninger."
+      }
+    },
+    "error": {
+      "invalid_auth": "Ugyldigt login",
+      "unknown": "Uventet fejl"
+    },
+    "abort": {
+      "already_configured": "Kontoen er allerede konfigureret"
+    }
+  }
+}

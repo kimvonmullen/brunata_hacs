@@ -4,6 +4,7 @@
   "codeowners": ["@kimvonmullen"],
   "documentation": "https://github.com/kimvonmullen/brunata_hacs",
   "iot_class": "cloud_polling",
+  "config_flow": true,
   "issue_tracker": "https://github.com/kimvonmullen/brunata_hacs/issues",
   "requirements": ["brunata-api"],
   "version": "0.1"
