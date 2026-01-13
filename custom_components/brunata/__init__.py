@@ -57,62 +57,51 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from API."""
         try:
-            # Hvis vi ikke har data endnu, henter vi historik
-            if not self.data:
-                # Vi har erfaret at for lange intervaller kan returnere 0 elementer
-                # Vi prøver med 90 dage i stedet for 365 for at være mere sikre på bid
-                _LOGGER.info("Henter historiske Brunata målinger (90 dage tilbage)")
-                start_date = datetime.now() - timedelta(days=90)
-                start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            # Vi henter målere uden startdate for at få de absolut nyeste målinger
+            # for alle målere. Brunatas API returnerer den første måling i en periode
+            # hvis man angiver startdate, hvilket giver forældede data.
+            await self.client._get_tokens()
+            await self.client._init_mappers()
 
-                # Vi skal kalde update_meters manuelt med vores start_date
-                # da get_meters() altid bruger dags dato i brunata-api 0.1.6
-                await self.client._get_tokens()
-                await self.client._init_mappers()
+            from brunata_api.const import API_URL, METERS_URL
+            from brunata_api import Meter
 
-                # Vi bruger api_wrapper direkte for at styre startdate
-                from brunata_api.const import API_URL, METERS_URL
-                from brunata_api import Meter
+            # Hent alle målere med deres seneste status
+            result = (
+                await self.client.api_wrapper(
+                    method="GET",
+                    url=f"{API_URL}/consumer/meters",
+                    headers={
+                        "Referer": METERS_URL,
+                    },
+                )
+            ).json()
 
-                result = (
-                    await self.client.api_wrapper(
-                        method="GET",
-                        url=f"{API_URL}/consumer/meters",
-                        params={
-                            "startdate": f"{start_date.isoformat()}.000Z",
-                        },
-                        headers={
-                            "Referer": METERS_URL,
-                        },
-                    )
-                ).json()
+            for item in result:
+                json_meter = item.get("meter")
+                if not json_meter:
+                    continue
+                
+                # Filtrer målere uden superAllocationUnit (ofte ikke-aktive eller interne enheder)
+                if json_meter.get("superAllocationUnit") is None:
+                    continue
+                
+                json_reading = item.get("reading")
+                meter_id = str(json_meter.get("meterId"))
+                
+                meter = self.client._meters.get(meter_id)
+                if meter is None:
+                    meter = Meter(self.client, json_meter)
+                    self.client._meters[meter_id] = meter
+                
+                if json_reading and json_reading.get("value") is not None:
+                    meter.add_reading(json_reading)
 
-                for item in result:
-                    json_meter = item.get("meter")
-                    if not json_meter or json_meter.get("superAllocationUnit") is None:
-                        continue
-                    
-                    json_reading = item.get("reading")
-                    meter_id = str(json_meter.get("meterId"))
-                    
-                    meter = self.client._meters.get(meter_id)
-                    if meter is None:
-                        from brunata_api import Meter
-                        meter = Meter(self.client, json_meter)
-                        self.client._meters[meter_id] = meter
-                    
-                    if json_reading:
-                        meter.add_reading(json_reading)
+            if not self.client._meters:
+                _LOGGER.warning("Ingen målere fundet. Forsøger standard hentning via get_meters().")
+                meters = await self.client.get_meters()
+                return {meter._meter_id: meter for meter in meters}
 
-                if not self.client._meters:
-                    _LOGGER.warning("Ingen målere fundet i historik-opslaget. Forsøger standard hentning.")
-                    meters = await self.client.get_meters()
-                    return {meter._meter_id: meter for meter in meters}
-
-                return self.client._meters
-
-            # Ellers bare almindelig opdatering
-            meters = await self.client.get_meters()
-            return {meter._meter_id: meter for meter in meters}
+            return self.client._meters
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")

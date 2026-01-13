@@ -71,6 +71,6 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Return the state of the sensor."""
         meter = self.coordinator.data.get(self._meter_id)
-        if meter:
+        if meter and meter.latest_reading:
             return meter.latest_reading.value
         return None
