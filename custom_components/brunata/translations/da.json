@@ -16,5 +16,12 @@
     "abort": {
       "already_configured": "Kontoen er allerede konfigureret"
     }
+  },
+  "entity": {
+    "sensor": {
+      "consumption": {
+        "name": "Forbrug"
+      }
+    }
   }
 }
