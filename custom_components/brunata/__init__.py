@@ -72,10 +72,12 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from API."""
         try:
-            # Hvis vi ikke har data endnu, henter vi historik (f.eks. 1 år tilbage)
+            # Hvis vi ikke har data endnu, henter vi historik
             if not self.data:
-                _LOGGER.info("Henter historiske Brunata målinger (1 år tilbage)")
-                start_date = datetime.now() - timedelta(days=365)
+                # Vi har erfaret at for lange intervaller kan returnere 0 elementer
+                # Vi prøver med 90 dage i stedet for 365 for at være mere sikre på bid
+                _LOGGER.info("Henter historiske Brunata målinger (90 dage tilbage)")
+                start_date = datetime.now() - timedelta(days=90)
                 start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
                 # Vi skal kalde update_meters manuelt med vores start_date
@@ -101,16 +103,25 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                 ).json()
 
                 for item in result:
-                    json_meter = item["meter"]
-                    if json_meter["superAllocationUnit"] is None:
+                    json_meter = item.get("meter")
+                    if not json_meter or json_meter.get("superAllocationUnit") is None:
                         continue
-                    json_reading = item["reading"]
-                    meter_id = str(json_meter["meterId"])
+                    
+                    json_reading = item.get("reading")
+                    meter_id = str(json_meter.get("meterId"))
+                    
                     meter = self.client._meters.get(meter_id)
                     if meter is None:
+                        from brunata_api import Meter
                         meter = Meter(self.client, json_meter)
                         self.client._meters[meter_id] = meter
-                    meter.add_reading(json_reading)
+                    
+                    if json_reading:
+                        meter.add_reading(json_reading)
+
+                if not self.client._meters:
+                    _LOGGER.warning("Ingen målere fundet i historik-opslaget. Forsøger standard hentning.")
+                    return await self.client.get_meters()
 
                 return self.client._meters
 
