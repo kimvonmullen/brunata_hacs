@@ -75,3 +75,13 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
         if meter and meter.latest_reading:
             return meter.latest_reading.value
         return None
+
+    @property
+    def extra_state_attributes(self):
+        """Return the state attributes."""
+        meter = self.coordinator.data.get(self._meter_id)
+        if meter and meter.latest_reading:
+            return {
+                "reading_date": meter.latest_reading.date,
+            }
+        return {}

@@ -21,7 +21,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     email = entry.data[CONF_EMAIL]
     password = entry.data[CONF_PASSWORD]
 
-    client = Client(email, password)
+    client = await hass.async_add_executor_job(Client, email, password)
     coordinator = BrunataDataUpdateCoordinator(hass, client)
 
     # Hent data første gang
@@ -51,7 +51,7 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(hours=24),
+            update_interval=timedelta(hours=1),
         )
 
     async def _async_update_data(self):

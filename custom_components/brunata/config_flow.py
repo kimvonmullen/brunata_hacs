@@ -19,7 +19,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, str]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    client = Client(data[CONF_EMAIL], data[CONF_PASSWORD])
+    client = await hass.async_add_executor_job(Client, data[CONF_EMAIL], data[CONF_PASSWORD])
     
     try:
         # Forsøg at hente målere for at validere login
