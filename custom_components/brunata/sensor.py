@@ -45,12 +45,26 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"brunata_{self._meter_id}_consumption"
         self._attr_has_entity_name = True
         self._attr_translation_key = "consumption"
-        self._attr_native_unit_of_measurement = meter.meter_unit
+        self._attr_suggested_object_id = f"brunata_{self._meter_id}_consumption"
+
+        # Håndter enhed og map m3 til m³
+        raw_unit = meter.meter_unit or ""
+        unit = raw_unit.lower()
+        if unit == "m3":
+            self._attr_native_unit_of_measurement = "m³"
+        elif not unit:
+            # For målere uden enhed (f.eks. radiatormålere) bruger vi 'pts' (points)
+            self._attr_native_unit_of_measurement = "pts"
+        else:
+            self._attr_native_unit_of_measurement = raw_unit
 
         # Bestem device class og ikon
-        unit = meter.meter_unit.lower()
+        meter_type = meter.meter_type.lower()
         if unit in ["m³", "m3", "l"]:
-            self._attr_device_class = SensorDeviceClass.WATER
+            if "gas" in meter_type:
+                self._attr_device_class = SensorDeviceClass.GAS
+            else:
+                self._attr_device_class = SensorDeviceClass.WATER
             self._attr_icon = "mdi:water"
         elif unit in ["kwh", "mwh"]:
             self._attr_device_class = SensorDeviceClass.ENERGY
@@ -59,6 +73,7 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
             self._attr_icon = "mdi:gauge"
             
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_suggested_display_precision = 2
 
         # Gruppér under en enhed pr. måler ligesom i MQTT scriptet
         self._attr_device_info = DeviceInfo(

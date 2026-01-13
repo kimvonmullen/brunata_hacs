@@ -89,12 +89,15 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                 json_reading = item.get("reading")
                 meter_id = str(json_meter.get("meterId"))
                 
+                _LOGGER.debug("Behandler måler %s: %s", meter_id, json_meter.get("meterNo"))
+                
                 meter = self.client._meters.get(meter_id)
                 if meter is None:
                     meter = Meter(self.client, json_meter)
                     self.client._meters[meter_id] = meter
                 
                 if json_reading and json_reading.get("value") is not None:
+                    _LOGGER.debug("Tilføjer aflæsning for %s: %s (dato: %s)", meter_id, json_reading.get("value"), json_reading.get("readingDate"))
                     meter.add_reading(json_reading)
 
             if not self.client._meters:
@@ -102,6 +105,7 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                 meters = await self.client.get_meters()
                 return {meter._meter_id: meter for meter in meters}
 
-            return self.client._meters
+            # Returner en kopi af ordbogen for at sikre at koordinatoren opdager ændringer
+            return dict(self.client._meters)
         except Exception as err:
             raise UpdateFailed(f"Error communicating with API: {err}")
