@@ -1,6 +1,8 @@
 # Brunata Home Assistant Integration
 
-A Home Assistant integration for Brunata meters, allowing you to monitor your consumption (water and energy) directly in your dashboard.
+A Home Assistant integration for Brunata meters, allowing you to monitor your consumption (water and energy) directly in your dashboard. 
+
+NOT OFFICALLY SUPPORTED BY BRUNATA.
 
 ## Features
 - Automatically discovers your Brunata meters.
