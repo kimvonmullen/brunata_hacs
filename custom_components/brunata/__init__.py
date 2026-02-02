@@ -85,8 +85,22 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                     "Referer": METERS_URL,
                 },
             )
+            
+            if response is None:
+                _LOGGER.error("Ingen respons fra API'et")
+                return self.client._meters
+
             _LOGGER.debug("API-svar fra /consumer/meters: %s", response.text)
-            result = response.json()
+            
+            try:
+                result = response.json()
+            except Exception as json_err:
+                _LOGGER.error("Fejl ved parsing af JSON fra API: %s. Svar: %s", json_err, response.text)
+                return self.client._meters
+
+            if not isinstance(result, list):
+                _LOGGER.error("Uventet API-svar format: forventede liste, fik %s. Svar: %s", type(result), response.text)
+                return self.client._meters
 
             for item in result:
                 json_meter = item.get("meter")
