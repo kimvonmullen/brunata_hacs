@@ -17,6 +17,15 @@
       "already_configured": "Device is already configured"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "debug_logging": "Enable debug logging"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "consumption": {

@@ -17,6 +17,15 @@
       "already_configured": "Kontoen er allerede konfigureret"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "debug_logging": "Aktiver debug-logning"
+        }
+      }
+    }
+  },
   "entity": {
     "sensor": {
       "consumption": {
