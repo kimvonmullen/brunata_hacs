@@ -68,15 +68,15 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             from brunata_api import Meter
 
             # Hent alle målere med deres seneste status
-            result = (
-                await self.client.api_wrapper(
-                    method="GET",
-                    url=f"{API_URL}/consumer/meters",
-                    headers={
-                        "Referer": METERS_URL,
-                    },
-                )
-            ).json()
+            response = await self.client.api_wrapper(
+                method="GET",
+                url=f"{API_URL}/consumer/meters",
+                headers={
+                    "Referer": METERS_URL,
+                },
+            )
+            _LOGGER.debug("API-svar fra /consumer/meters: %s", response.text)
+            result = response.json()
 
             for item in result:
                 json_meter = item.get("meter")
@@ -98,7 +98,13 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                     self.client._meters[meter_id] = meter
                 
                 if json_reading and json_reading.get("value") is not None:
-                    _LOGGER.debug("Tilføjer aflæsning for %s: %s (dato: %s)", meter_id, json_reading.get("value"), json_reading.get("readingDate"))
+                    _LOGGER.debug(
+                        "Tilføjer aflæsning for %s: %s (dato: %s). Rå data: %s",
+                        meter_id,
+                        json_reading.get("value"),
+                        json_reading.get("readingDate"),
+                        json_reading,
+                    )
                     meter.add_reading(json_reading)
 
             if not self.client._meters:
