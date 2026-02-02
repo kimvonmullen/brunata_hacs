@@ -5,7 +5,8 @@
   "config_flow": true,
   "documentation": "https://github.com/kimvonmullen/brunata_hacs",
   "iot_class": "cloud_polling",
+  "integration_type": "service",
   "issue_tracker": "https://github.com/kimvonmullen/brunata_hacs/issues",
   "requirements": ["brunata-api"],
-  "version": "0.1"
+  "version": "0.1.1"
 }
