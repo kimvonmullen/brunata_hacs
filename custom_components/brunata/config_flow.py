@@ -22,27 +22,29 @@ async def validate_input(hass: HomeAssistant, data: dict[str, str]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
+    _LOGGER.debug("Validating input for %s", data[CONF_EMAIL])
     client = await hass.async_add_executor_job(Client, data[CONF_EMAIL], data[CONF_PASSWORD])
     
     try:
-        # Forsøg at hente målere for at validere login
-        _LOGGER.debug("Forsøger at validere login ved at hente målere for %s", data[CONF_EMAIL])
-        # Biblioteket har en fejl med await på dict i _renew_tokens/_b2c_auth
+        # Attempt to fetch meters to validate login
+        _LOGGER.debug("Attempting to validate login by fetching meters for %s", data[CONF_EMAIL])
+        # The library has a bug with await on dict in _renew_tokens/_b2c_auth
         try:
             meters = await client.get_meters()
         except TypeError as err:
             if "await" in str(err) and "dict" in str(err):
-                 _LOGGER.error("Fejl i brunata-api biblioteket: 'object dict can't be used in await expression'")
+                 _LOGGER.error("Error in brunata-api library: 'object dict can't be used in await expression'")
             raise InvalidAuth from err
         
         if meters:
-            _LOGGER.debug("Login valideret, fandt %s målere", len(meters))
+            _LOGGER.debug("Login validated, found %s meters", len(meters))
         else:
-            _LOGGER.warning("Login valideret, men ingen målere fundet")
+            _LOGGER.warning("Login validated, but no meters found")
     except InvalidAuth:
+        _LOGGER.warning("Authentication failed for %s", data[CONF_EMAIL])
         raise
     except Exception as err:
-        _LOGGER.error("Kunne ikke validere Brunata login: %s", err)
+        _LOGGER.error("Could not validate Brunata login: %s", err)
         raise InvalidAuth from err
 
     return {"title": data[CONF_EMAIL]}
@@ -54,17 +56,19 @@ class BrunataConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle the initial step."""
+        _LOGGER.debug("async_step_user called with input: %s", user_input)
         errors = {}
         if user_input is not None:
             await self.async_set_unique_id(user_input[CONF_EMAIL])
             self._abort_if_unique_id_configured()
             try:
                 info = await validate_input(self.hass, user_input)
+                _LOGGER.debug("Config entry created for %s", user_input[CONF_EMAIL])
                 return self.async_create_entry(title=info["title"], data=user_input)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Uventet fejl")
+                _LOGGER.exception("Unexpected error during config flow")
                 errors["base"] = "unknown"
 
         return self.async_show_form(

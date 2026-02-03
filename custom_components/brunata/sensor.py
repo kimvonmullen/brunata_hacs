@@ -27,12 +27,15 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Brunata sensors based on a config entry."""
+    _LOGGER.debug("Setting up Brunata sensors for entry %s", entry.entry_id)
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
     entities = []
     for meter_id, meter in coordinator.data.items():
+        _LOGGER.debug("Creating BrunataSensor for meter %s", meter_id)
         entities.append(BrunataSensor(coordinator, meter))
     
+    _LOGGER.debug("Adding %s entities", len(entities))
     async_add_entities(entities)
 
 class BrunataSensor(CoordinatorEntity, SensorEntity):
@@ -47,18 +50,18 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
         self._attr_translation_key = "consumption"
         self._attr_suggested_object_id = f"brunata_{self._meter_id}_consumption"
 
-        # Håndter enhed og map m3 til m³
+        # Handle unit and map m3 to m³
         raw_unit = meter.meter_unit or ""
         unit = raw_unit.lower()
         if unit == "m3":
             self._attr_native_unit_of_measurement = "m³"
         elif not unit:
-            # For målere uden enhed (f.eks. radiatormålere) bruger vi 'pts' (points)
+            # For meters without unit (e.g. radiator meters) we use 'pts' (points)
             self._attr_native_unit_of_measurement = "pts"
         else:
             self._attr_native_unit_of_measurement = raw_unit
 
-        # Bestem device class og ikon
+        # Determine device class and icon
         meter_type = meter.meter_type.lower()
         if unit in ["m³", "m3", "l"]:
             if "gas" in meter_type:
@@ -75,13 +78,14 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_suggested_display_precision = 2
 
-        # Gruppér under en enhed pr. måler ligesom i MQTT scriptet
+        # Group under a device per meter like in the MQTT script
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"brunata_{self._meter_id}")},
             name=f"Brunata {meter.meter_type} ({self._meter_id})",
             manufacturer="Brunata",
             model=meter.meter_type,
         )
+        _LOGGER.debug("Initialized BrunataSensor for meter %s (%s)", self._meter_id, meter.meter_type)
 
     @property
     def native_value(self):

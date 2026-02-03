@@ -20,20 +20,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Brunata from a config entry."""
     if entry.options.get(CONF_DEBUG_LOGGING):
         _LOGGER.setLevel(logging.DEBUG)
-        _LOGGER.debug("Debug logging aktiveret via indstillinger")
+        _LOGGER.debug("Debug logging enabled via settings")
 
     email = entry.data[CONF_EMAIL]
     password = entry.data[CONF_PASSWORD]
 
+    _LOGGER.debug("Setting up Brunata integration for %s", email)
     client = await hass.async_add_executor_job(Client, email, password)
     coordinator = BrunataDataUpdateCoordinator(hass, client)
 
-    # Hent data første gang
+    # Initial data refresh
+    _LOGGER.debug("Performing initial data refresh")
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    _LOGGER.debug("Forwarding setups to platforms: %s", PLATFORMS)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
     entry.async_on_unload(entry.add_update_listener(async_update_options))
@@ -67,27 +70,30 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API."""
+        _LOGGER.debug("Starting data update from Brunata API")
         try:
-            # Vi henter målere uden startdate for at få de absolut nyeste målinger
-            # for alle målere. Brunatas API returnerer den første måling i en periode
-            # hvis man angiver startdate, hvilket giver forældede data.
+            # We fetch meters without startdate to get the absolute latest measurements
+            # for all meters. Brunata's API returns the first measurement in a period
+            # if startdate is specified, which gives outdated data.
             
-            # Biblioteket har en fejl hvor det forsøger at awaite en dict
-            # i _get_tokens -> _renew_tokens og _b2c_auth.
-            # Vi pakker det ind i en try-except for at give en bedre fejlbesked
-            # hvis det fejler i biblioteket.
+            # The library has a bug where it tries to await a dict
+            # in _get_tokens -> _renew_tokens and _b2c_auth.
+            # We wrap it in a try-except to provide a better error message
+            # if it fails in the library.
             try:
+                _LOGGER.debug("Refreshing tokens and initializing mappers")
                 await self.client._get_tokens()
                 await self.client._init_mappers()
             except TypeError as err:
                 if "await" in str(err) and "dict" in str(err):
-                    _LOGGER.error("Fejl i brunata-api biblioteket: 'object dict can't be used in await expression'. Sørg for at have en rettet version af biblioteket eller kontakt udvikleren.")
-                raise UpdateFailed(f"Fejl ved kommunikation med Brunata API via biblioteket: {err}") from err
+                    _LOGGER.error("Error in brunata-api library: 'object dict can't be used in await expression'. Ensure you have a fixed version of the library or contact the developer.")
+                raise UpdateFailed(f"Error communicating with Brunata API via library: {err}") from err
 
             from brunata_api.const import API_URL, METERS_URL
             from brunata_api import Meter
 
-            # Hent alle målere med deres seneste status
+            # Fetch all meters with their latest status
+            _LOGGER.debug("Fetching meters from %s/consumer/meters", API_URL)
             response = await self.client.api_wrapper(
                 method="GET",
                 url=f"{API_URL}/consumer/meters",
@@ -97,21 +103,22 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             )
             
             if response is None:
-                _LOGGER.warning("Ingen respons fra API'et (timeout eller forbindelsesfejl)")
+                _LOGGER.warning("No response from API (timeout or connection error)")
                 return self.client._meters
 
-            _LOGGER.debug("API-svar fra /consumer/meters: %s", response.text)
+            _LOGGER.debug("API response from /consumer/meters: %s", response.text)
             
             try:
                 result = response.json()
             except Exception as json_err:
-                _LOGGER.error("Fejl ved parsing af JSON fra API: %s. Svar: %s", json_err, response.text)
+                _LOGGER.error("Error parsing JSON from API: %s. Response: %s", json_err, response.text)
                 return self.client._meters
 
             if not isinstance(result, list):
-                _LOGGER.error("Uventet API-svar format: forventede liste, fik %s. Svar: %s", type(result), response.text)
+                _LOGGER.error("Unexpected API response format: expected list, got %s. Response: %s", type(result), response.text)
                 return self.client._meters
 
+            _LOGGER.debug("Processing %s items from API", len(result))
             for item in result:
                 if not isinstance(item, dict):
                     continue
@@ -120,23 +127,25 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                 if not isinstance(json_meter, dict):
                     continue
                 
-                # Filtrer målere uden superAllocationUnit (ofte ikke-aktive eller interne enheder)
+                # Filter meters without superAllocationUnit (often inactive or internal devices)
                 if json_meter.get("superAllocationUnit") is None:
+                    _LOGGER.debug("Skipping meter %s as it has no superAllocationUnit", json_meter.get("meterId"))
                     continue
                 
                 json_reading = item.get("reading")
                 meter_id = str(json_meter.get("meterId"))
                 
-                _LOGGER.debug("Behandler måler %s: %s", meter_id, json_meter.get("meterNo"))
+                _LOGGER.debug("Processing meter %s: %s", meter_id, json_meter.get("meterNo"))
                 
                 meter = self.client._meters.get(meter_id)
                 if meter is None:
+                    _LOGGER.debug("New meter found: %s", meter_id)
                     meter = Meter(self.client, json_meter)
                     self.client._meters[meter_id] = meter
                 
                 if isinstance(json_reading, dict) and json_reading.get("value") is not None:
                     _LOGGER.debug(
-                        "Tilføjer aflæsning for %s: %s (dato: %s). Rå data: %s",
+                        "Adding reading for %s: %s (date: %s). Raw data: %s",
                         meter_id,
                         json_reading.get("value"),
                         json_reading.get("readingDate"),
@@ -145,17 +154,19 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                     meter.add_reading(json_reading)
 
             if not self.client._meters:
-                _LOGGER.warning("Ingen målere fundet. Forsøger standard hentning via get_meters().")
+                _LOGGER.warning("No meters found. Attempting default fetch via get_meters().")
                 try:
                     meters = await self.client.get_meters()
                     if meters:
+                        _LOGGER.debug("Found %s meters via get_meters()", len(meters))
                         return {meter._meter_id: meter for meter in meters}
                 except Exception as get_meters_err:
-                    _LOGGER.error("Fejl ved kald til get_meters(): %s", get_meters_err)
+                    _LOGGER.error("Error calling get_meters(): %s", get_meters_err)
 
-            # Returner en kopi af ordbogen for at sikre at koordinatoren opdager ændringer
+            # Return a copy of the dictionary to ensure the coordinator detects changes
+            _LOGGER.debug("Data update complete. Total meters: %s", len(self.client._meters))
             return dict(self.client._meters)
         except UpdateFailed:
             raise
         except Exception as err:
-            raise UpdateFailed(f"Uventet fejl ved hentning af data: {err}") from err
+            raise UpdateFailed(f"Unexpected error fetching data: {err}") from err
