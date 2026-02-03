@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from brunata_api import Client
+from brunata_api.const import OAUTH2_URL, CLIENT_ID
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -13,6 +14,33 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_DEBUG_LOGGING
 
 _LOGGER = logging.getLogger(__name__)
+
+# Monkeypatch to fix bug in brunata_api library where it awaits a dict in _renew_tokens
+async def _renew_tokens_fixed(self) -> dict:
+    """Renew access token using refresh token."""
+    if self._is_token_valid("access_token"):
+        _LOGGER.debug(
+            "Token is not expired, expires in %d seconds",
+            self._tokens.get("expires_on") - int(datetime.now().timestamp()),
+        )
+        return self._tokens
+    # Get OAuth 2.0 token object
+    try:
+        tokens = await self.api_wrapper(
+            method="POST",
+            url=f"{OAUTH2_URL}/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": self._tokens.get("refresh_token"),
+                "CLIENT_ID": CLIENT_ID,
+            },
+        )
+    except Exception:
+        _LOGGER.exception("An error occurred while trying to renew tokens")
+        return {}
+    return tokens.json()
+
+Client._renew_tokens = _renew_tokens_fixed
 
 PLATFORMS: list[str] = ["sensor"]
 
