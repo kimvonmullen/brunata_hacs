@@ -71,8 +71,18 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             # Vi henter målere uden startdate for at få de absolut nyeste målinger
             # for alle målere. Brunatas API returnerer den første måling i en periode
             # hvis man angiver startdate, hvilket giver forældede data.
-            await self.client._get_tokens()
-            await self.client._init_mappers()
+            
+            # Biblioteket har en fejl hvor det forsøger at awaite en dict
+            # i _get_tokens -> _renew_tokens og _b2c_auth.
+            # Vi pakker det ind i en try-except for at give en bedre fejlbesked
+            # hvis det fejler i biblioteket.
+            try:
+                await self.client._get_tokens()
+                await self.client._init_mappers()
+            except TypeError as err:
+                if "await" in str(err) and "dict" in str(err):
+                    _LOGGER.error("Fejl i brunata-api biblioteket: 'object dict can't be used in await expression'. Sørg for at have en rettet version af biblioteket eller kontakt udvikleren.")
+                raise UpdateFailed(f"Fejl ved kommunikation med Brunata API via biblioteket: {err}") from err
 
             from brunata_api.const import API_URL, METERS_URL
             from brunata_api import Meter
@@ -87,7 +97,7 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             )
             
             if response is None:
-                _LOGGER.error("Ingen respons fra API'et")
+                _LOGGER.warning("Ingen respons fra API'et (timeout eller forbindelsesfejl)")
                 return self.client._meters
 
             _LOGGER.debug("API-svar fra /consumer/meters: %s", response.text)
@@ -103,8 +113,11 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                 return self.client._meters
 
             for item in result:
+                if not isinstance(item, dict):
+                    continue
+                    
                 json_meter = item.get("meter")
-                if not json_meter:
+                if not isinstance(json_meter, dict):
                     continue
                 
                 # Filtrer målere uden superAllocationUnit (ofte ikke-aktive eller interne enheder)
@@ -121,7 +134,7 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                     meter = Meter(self.client, json_meter)
                     self.client._meters[meter_id] = meter
                 
-                if json_reading and json_reading.get("value") is not None:
+                if isinstance(json_reading, dict) and json_reading.get("value") is not None:
                     _LOGGER.debug(
                         "Tilføjer aflæsning for %s: %s (dato: %s). Rå data: %s",
                         meter_id,
@@ -133,10 +146,16 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
 
             if not self.client._meters:
                 _LOGGER.warning("Ingen målere fundet. Forsøger standard hentning via get_meters().")
-                meters = await self.client.get_meters()
-                return {meter._meter_id: meter for meter in meters}
+                try:
+                    meters = await self.client.get_meters()
+                    if meters:
+                        return {meter._meter_id: meter for meter in meters}
+                except Exception as get_meters_err:
+                    _LOGGER.error("Fejl ved kald til get_meters(): %s", get_meters_err)
 
             # Returner en kopi af ordbogen for at sikre at koordinatoren opdager ændringer
             return dict(self.client._meters)
+        except UpdateFailed:
+            raise
         except Exception as err:
-            raise UpdateFailed(f"Error communicating with API: {err}")
+            raise UpdateFailed(f"Uventet fejl ved hentning af data: {err}") from err

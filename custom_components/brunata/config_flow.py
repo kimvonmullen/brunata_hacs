@@ -27,8 +27,20 @@ async def validate_input(hass: HomeAssistant, data: dict[str, str]) -> dict[str,
     try:
         # Forsøg at hente målere for at validere login
         _LOGGER.debug("Forsøger at validere login ved at hente målere for %s", data[CONF_EMAIL])
-        meters = await client.get_meters()
-        _LOGGER.debug("Login valideret, fandt %s målere", len(meters))
+        # Biblioteket har en fejl med await på dict i _renew_tokens/_b2c_auth
+        try:
+            meters = await client.get_meters()
+        except TypeError as err:
+            if "await" in str(err) and "dict" in str(err):
+                 _LOGGER.error("Fejl i brunata-api biblioteket: 'object dict can't be used in await expression'")
+            raise InvalidAuth from err
+        
+        if meters:
+            _LOGGER.debug("Login valideret, fandt %s målere", len(meters))
+        else:
+            _LOGGER.warning("Login valideret, men ingen målere fundet")
+    except InvalidAuth:
+        raise
     except Exception as err:
         _LOGGER.error("Kunne ikke validere Brunata login: %s", err)
         raise InvalidAuth from err
