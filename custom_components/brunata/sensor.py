@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
-from brunata_api import Client
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -13,11 +11,10 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,14 +26,23 @@ async def async_setup_entry(
     """Set up Brunata sensors based on a config entry."""
     _LOGGER.debug("Setting up Brunata sensors for entry %s", entry.entry_id)
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    
-    entities = []
-    for meter_id, meter in coordinator.data.items():
-        _LOGGER.debug("Creating BrunataSensor for meter %s", meter_id)
-        entities.append(BrunataSensor(coordinator, meter))
-    
-    _LOGGER.debug("Adding %s entities", len(entities))
-    async_add_entities(entities)
+
+    known_meter_ids: set[str] = set()
+
+    def _add_new_meters() -> None:
+        """Add sensor entities for any newly discovered meters."""
+        new_entities = []
+        for meter_id, meter in coordinator.data.items():
+            if meter_id not in known_meter_ids:
+                _LOGGER.debug("Creating BrunataSensor for meter %s", meter_id)
+                known_meter_ids.add(meter_id)
+                new_entities.append(BrunataSensor(coordinator, meter))
+        if new_entities:
+            _LOGGER.debug("Adding %s new entities", len(new_entities))
+            async_add_entities(new_entities)
+
+    _add_new_meters()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_meters))
 
 class BrunataSensor(CoordinatorEntity, SensorEntity):
     """Representation of a Brunata meter."""
@@ -62,7 +68,7 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
             self._attr_native_unit_of_measurement = raw_unit
 
         # Determine device class and icon
-        meter_type = meter.meter_type.lower()
+        meter_type = (meter.meter_type or "").lower()
         if unit in ["m³", "m3", "l"]:
             if "gas" in meter_type:
                 self._attr_device_class = SensorDeviceClass.GAS
@@ -74,11 +80,11 @@ class BrunataSensor(CoordinatorEntity, SensorEntity):
             self._attr_icon = "mdi:lightning-bolt"
         else:
             self._attr_icon = "mdi:gauge"
-            
+
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_suggested_display_precision = 2
 
-        # Group under a device per meter like in the MQTT script
+        # Group under a device per meter
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"brunata_{self._meter_id}")},
             name=f"Brunata {meter.meter_type} ({self._meter_id})",

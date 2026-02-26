@@ -88,14 +88,10 @@ class BrunataConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> BrunataOptionsFlowHandler:
         """Get the options flow for this handler."""
-        return BrunataOptionsFlowHandler(config_entry)
+        return BrunataOptionsFlowHandler()
 
 class BrunataOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle Brunata options."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize Brunata options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

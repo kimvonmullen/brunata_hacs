@@ -48,6 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Brunata from a config entry."""
     if entry.options.get(CONF_DEBUG_LOGGING):
         _LOGGER.setLevel(logging.DEBUG)
+        logging.getLogger("brunata_api").setLevel(logging.DEBUG)
         _LOGGER.debug("Debug logging enabled via settings")
 
     email = entry.data[CONF_EMAIL]
@@ -129,48 +130,48 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                     "Referer": METERS_URL,
                 },
             )
-            
+
             if response is None:
                 _LOGGER.warning("No response from API (timeout or connection error)")
-                return self.client._meters
+                return dict(self.client._meters)
 
             _LOGGER.debug("API response from /consumer/meters: %s", response.text)
-            
+
             try:
                 result = response.json()
             except Exception as json_err:
                 _LOGGER.error("Error parsing JSON from API: %s. Response: %s", json_err, response.text)
-                return self.client._meters
+                return dict(self.client._meters)
 
             if not isinstance(result, list):
                 _LOGGER.error("Unexpected API response format: expected list, got %s. Response: %s", type(result), response.text)
-                return self.client._meters
+                return dict(self.client._meters)
+
+            # Clear existing meters so readings don't accumulate across updates
+            self.client._meters.clear()
 
             _LOGGER.debug("Processing %s items from API", len(result))
             for item in result:
                 if not isinstance(item, dict):
                     continue
-                    
+
                 json_meter = item.get("meter")
                 if not isinstance(json_meter, dict):
                     continue
-                
+
                 # Filter meters without superAllocationUnit (often inactive or internal devices)
                 if json_meter.get("superAllocationUnit") is None:
                     _LOGGER.debug("Skipping meter %s as it has no superAllocationUnit", json_meter.get("meterId"))
                     continue
-                
+
                 json_reading = item.get("reading")
                 meter_id = str(json_meter.get("meterId"))
-                
+
                 _LOGGER.debug("Processing meter %s: %s", meter_id, json_meter.get("meterNo"))
-                
-                meter = self.client._meters.get(meter_id)
-                if meter is None:
-                    _LOGGER.debug("New meter found: %s", meter_id)
-                    meter = Meter(self.client, json_meter)
-                    self.client._meters[meter_id] = meter
-                
+
+                meter = Meter(self.client, json_meter)
+                self.client._meters[meter_id] = meter
+
                 if isinstance(json_reading, dict) and json_reading.get("value") is not None:
                     _LOGGER.debug(
                         "Adding reading for %s: %s (date: %s). Raw data: %s",
@@ -187,7 +188,8 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
                     meters = await self.client.get_meters()
                     if meters:
                         _LOGGER.debug("Found %s meters via get_meters()", len(meters))
-                        return {meter._meter_id: meter for meter in meters}
+                        # get_meters() populates self.client._meters; return a copy of it
+                        return dict(self.client._meters)
                 except Exception as get_meters_err:
                     _LOGGER.error("Error calling get_meters(): %s", get_meters_err)
 
