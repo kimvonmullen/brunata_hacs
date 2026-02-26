@@ -4,6 +4,14 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+try:
+    # httpx is a dependency of brunata_api and always available at runtime.
+    # The IDE may not resolve it if httpx is not installed in the dev environment.
+    import httpx as _httpx
+    _CONNECT_ERRORS = (ConnectionError, UnboundLocalError, _httpx.ConnectError, _httpx.ConnectTimeout, _httpx.ReadTimeout)
+except ImportError:
+    _CONNECT_ERRORS = (ConnectionError, UnboundLocalError)
+
 from brunata_api import Client
 from brunata_api.const import OAUTH2_URL, CLIENT_ID
 
@@ -202,10 +210,10 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             return dict(self.client._meters)
         except UpdateFailed:
             raise
-        except (ConnectionError, UnboundLocalError) as err:
-            # ConnectionError: raised by _renew_tokens_fixed on network failure.
-            # UnboundLocalError: library bug in api_wrapper when ConnectError occurs
-            # during direct API calls (e.g. fetching meters).
+        except _CONNECT_ERRORS as err:
+            # Covers httpx.ConnectError/ConnectTimeout/ReadTimeout (network unavailable),
+            # ConnectionError (raised by _renew_tokens_fixed), and UnboundLocalError
+            # (library bug in api_wrapper when a ConnectError occurs mid-call).
             raise UpdateFailed("Cannot connect to Brunata — will retry next interval") from err
         except Exception as err:
             raise UpdateFailed(f"Unexpected error fetching data: {err}") from err
