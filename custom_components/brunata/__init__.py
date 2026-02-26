@@ -35,9 +35,13 @@ async def _renew_tokens_fixed(self) -> dict:
                 "CLIENT_ID": CLIENT_ID,
             },
         )
+    except UnboundLocalError:
+        # Library bug: api_wrapper catches ConnectError but then tries to return an
+        # unassigned 'response' variable — treat this as a network connectivity error.
+        raise ConnectionError("Brunata token server unreachable") from None
     except Exception:
         _LOGGER.exception("An error occurred while trying to renew tokens")
-        return {}
+        raise
     return tokens.json()
 
 Client._renew_tokens = _renew_tokens_fixed
@@ -198,5 +202,10 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             return dict(self.client._meters)
         except UpdateFailed:
             raise
+        except (ConnectionError, UnboundLocalError) as err:
+            # ConnectionError: raised by _renew_tokens_fixed on network failure.
+            # UnboundLocalError: library bug in api_wrapper when ConnectError occurs
+            # during direct API calls (e.g. fetching meters).
+            raise UpdateFailed("Cannot connect to Brunata — will retry next interval") from err
         except Exception as err:
             raise UpdateFailed(f"Unexpected error fetching data: {err}") from err
