@@ -1,6 +1,7 @@
 {
   "domain": "brunata",
   "name": "Brunata",
+  "after_dependencies": ["network"],
   "codeowners": ["@kimvonmullen"],
   "config_flow": true,
   "documentation": "https://github.com/kimvonmullen/brunata_hacs",
@@ -8,6 +9,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/kimvonmullen/brunata_hacs/issues",
   "requirements": ["brunata-api"],
-  "after_dependencies": ["network"],
   "version": "0.1.1"
 }
