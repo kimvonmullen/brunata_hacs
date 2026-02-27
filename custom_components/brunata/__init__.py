@@ -1,7 +1,9 @@
 """The Brunata integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
+import socket
 from datetime import datetime, timedelta
 
 try:
@@ -17,11 +19,26 @@ from brunata_api.const import OAUTH2_URL, CLIENT_ID
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, CONF_EMAIL, CONF_PASSWORD, CONF_DEBUG_LOGGING
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _check_connectivity(host: str, port: int = 443, timeout: float = 5.0) -> bool:
+    """Quick TCP check to verify network reachability before invoking the library."""
+    try:
+        loop = asyncio.get_event_loop()
+        await asyncio.wait_for(
+            loop.run_in_executor(None, socket.create_connection, (host, port)),
+            timeout=timeout,
+        )
+        return True
+    except Exception:
+        return False
+
 
 # Monkeypatch to fix bug in brunata_api library where it awaits a dict in _renew_tokens
 async def _renew_tokens_fixed(self) -> dict:
@@ -65,6 +82,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     email = entry.data[CONF_EMAIL]
     password = entry.data[CONF_PASSWORD]
+
+    if not await _check_connectivity("online.brunata.com"):
+        raise ConfigEntryNotReady("Cannot reach Brunata servers — network not ready, will retry")
 
     _LOGGER.debug("Setting up Brunata integration for %s", email)
     client = await hass.async_add_executor_job(Client, email, password)
