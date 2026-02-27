@@ -234,6 +234,10 @@ class BrunataDataUpdateCoordinator(DataUpdateCoordinator):
             # Covers httpx.ConnectError/ConnectTimeout/ReadTimeout (network unavailable),
             # ConnectionError (raised by _renew_tokens_fixed), and UnboundLocalError
             # (library bug in api_wrapper when a ConnectError occurs mid-call).
+            if self.data is not None:
+                # Keep sensors available with their last known values instead of going unavailable.
+                _LOGGER.info("Cannot connect to Brunata — keeping last known values")
+                return self.data
             raise UpdateFailed("Cannot connect to Brunata — will retry next interval") from err
         except Exception as err:
             raise UpdateFailed(f"Unexpected error fetching data: {err}") from err
