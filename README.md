@@ -31,8 +31,6 @@ https://github.com/vondk/brunata_hacs
 6. Search for **Brunata** in HACS and click **Download**
 7. Restart Home Assistant
 
-> **Note on Branding:** If the logo/icon does not show up immediately, clear your browser cache or use an incognito window. HACS and Home Assistant can sometimes take a moment to refresh brand assets. For the icon to appear in the official "Add Integration" list, it must be submitted to the [Home Assistant Brands repository](https://github.com/home-assistant/brands).
-
 ### Manual Installation
 
 1. Download the `brunata` folder from `custom_components/`
@@ -47,6 +45,8 @@ https://github.com/vondk/brunata_hacs
 2. Click **Add Integration**
 3. Search for **Brunata**
 4. Enter your Brunata email and password
+
+> **Note on Branding:** If the logo/icon does not show up immediately, clear your browser cache or use an incognito window. HACS and Home Assistant can sometimes take a moment to refresh brand assets.
 
 ---
 
