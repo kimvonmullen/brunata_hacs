@@ -24,7 +24,7 @@ The **Brunata Integration** for Home Assistant allows you to monitor your Brunat
 2. Click the three-dot menu (top right) → **Custom Repositories**
 3. Add this repository:
 ```
-https://github.com/kimvonmullen/brunata_hacs
+https://github.com/vondk/brunata_hacs
 ```
 4. Set category to: **Integration**
 5. Click **Add**
